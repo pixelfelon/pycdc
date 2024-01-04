@@ -11,6 +11,10 @@
 #define DECLARE_PYTHON(maj, min) \
     extern int python_##maj##_##min##_map(int);
 
+#define DECLARE_PYTHON_WITH_CACHES(maj, min) \
+    extern int python_##maj##_##min##_map(int);\
+    extern int python_##maj##_##min##_caches_map(int);
+
 DECLARE_PYTHON(1, 0)
 DECLARE_PYTHON(1, 1)
 DECLARE_PYTHON(1, 3)
@@ -36,8 +40,8 @@ DECLARE_PYTHON(3, 7)
 DECLARE_PYTHON(3, 8)
 DECLARE_PYTHON(3, 9)
 DECLARE_PYTHON(3, 10)
-DECLARE_PYTHON(3, 11)
-DECLARE_PYTHON(3, 12)
+DECLARE_PYTHON_WITH_CACHES(3, 11)
+DECLARE_PYTHON_WITH_CACHES(3, 12)
 
 const char* Pyc::OpcodeName(int opcode)
 {
@@ -111,6 +115,21 @@ int Pyc::ByteToOpcode(int maj, int min, int opcode)
         break;
     }
     return PYC_INVALID_OPCODE;
+}
+
+int Pyc::CachesForOpcode(int maj, int min, int opcode)
+{
+    switch (maj) {
+        case 3:
+            switch (min) {
+                case 11: return python_3_11_caches_map(opcode);
+                case 12: return python_3_12_caches_map(opcode);
+                default:
+                    return 0;
+            }
+        default:
+            return 0;
+    }
 }
 
 void print_const(std::ostream& pyc_output, PycRef<PycObject> obj, PycModule* mod,
@@ -274,7 +293,7 @@ void print_const(std::ostream& pyc_output, PycRef<PycObject> obj, PycModule* mod
     }
 }
 
-void bc_next(PycBuffer& source, PycModule* mod, int& opcode, int& operand, int& pos)
+void bc_next(PycBuffer& source, PycModule* mod, int& opcode, int& operand, int& pos, bool skip_caches)
 {
     opcode = Pyc::ByteToOpcode(mod->majorVer(), mod->minorVer(), source.getByte());
     if (mod->verCompare(3, 6) >= 0) {
@@ -284,6 +303,16 @@ void bc_next(PycBuffer& source, PycModule* mod, int& opcode, int& operand, int& 
             opcode = Pyc::ByteToOpcode(mod->majorVer(), mod->minorVer(), source.getByte());
             operand = (operand << 8) | source.getByte();
             pos += 2;
+        }
+        if (skip_caches) {
+            // one might want to turn this off if actually printing the disassembly, but then it needs to be handled
+            // manually instead.
+            int caches = Pyc::CachesForOpcode(mod->majorVer(), mod->minorVer(), opcode);
+            for (int i = 0; i < caches; i++) {
+                // discard all cache bytes, don't know or care how to interpret them.
+                (void) source.get16();
+                pos += 2;
+            }
         }
     } else {
         operand = 0;
@@ -337,9 +366,7 @@ void bc_disasm(std::ostream& pyc_output, PycRef<PycCode> code, PycModule* mod,
     int pos = 0;
     while (!source.atEof()) {
         int start_pos = pos;
-        bc_next(source, mod, opcode, operand, pos);
-        if (opcode == Pyc::CACHE && (flags & Pyc::DISASM_SHOW_CACHES) == 0)
-            continue;
+        bc_next(source, mod, opcode, operand, pos, false);
 
         for (int i=0; i<indent; i++)
             pyc_output << "    ";
@@ -528,5 +555,19 @@ void bc_disasm(std::ostream& pyc_output, PycRef<PycCode> code, PycModule* mod,
             }
         }
         pyc_output << "\n";
+
+        // Deal with any CACHE entries. The number (if any) of them is determined by the preceding real opcode, and
+        // they don't have any structure that we care about. Most opcodes don't have any.
+        int caches = Pyc::CachesForOpcode(mod->majorVer(), mod->minorVer(), opcode);
+        for (int i = 0; i < caches; i++) {
+            int cache = source.get16();
+            if (flags & Pyc::DISASM_SHOW_CACHES) {
+                for (int j = 0; j < indent; j++)
+                    pyc_output << "    ";
+                formatted_print(pyc_output, "%-7d %-30s  %d", pos, "CACHE", cache);
+                pyc_output << "\n";
+            }
+            pos += 2;
+        }
     }
 }
