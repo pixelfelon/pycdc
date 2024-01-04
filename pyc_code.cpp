@@ -64,7 +64,9 @@ void PycCode::load(PycData* stream, PycModule* mod)
     else
         m_flags = 0;
 
+    int code_saddr = stream->getPos();
     m_code = LoadObject(stream, mod).cast<PycString>();
+    m_code->source_addr = code_saddr + 5;
     m_consts = LoadObject(stream, mod).cast<PycSequence>();
     m_names = LoadObject(stream, mod).cast<PycSequence>();
 

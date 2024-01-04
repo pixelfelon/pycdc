@@ -70,6 +70,7 @@ PycRef<PycObject> CreateObject(int type)
 
 PycRef<PycObject> LoadObject(PycData* stream, PycModule* mod)
 {
+    int source_addr = stream->getPos();
     int type = stream->getByte();
     PycRef<PycObject> obj;
 
@@ -85,5 +86,6 @@ PycRef<PycObject> LoadObject(PycData* stream, PycModule* mod)
         }
     }
 
+    obj->source_addr = source_addr;
     return obj;
 }

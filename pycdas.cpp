@@ -105,6 +105,9 @@ void output_object(PycRef<PycObject> obj, PycModule* mod, int indent,
                 iprintf(pyc_output, indent + 1, "Flags: 0x%08X", codeObj->flags());
                 print_coflags(codeObj->flags(), pyc_output);
             }
+            if (codeObj->code()->source_addr > 16) {
+                iprintf(pyc_output, indent + 1, "Code Start In File: 0x%04X\n", codeObj->code()->source_addr);
+            }
 
             iputs(pyc_output, indent + 1, "[Names]\n");
             for (int i=0; i<codeObj->names()->size(); i++)
