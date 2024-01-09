@@ -45,6 +45,26 @@ public:
         return m_ptr == -1;
     }
 
+    PycRef<ASTNode> get(int i) const
+    {
+        if ((m_ptr - i) > -1)
+            return m_stack[m_ptr - i];
+        else
+            return nullptr;
+    }
+
+    void put(int i, PycRef<ASTNode> node)
+    {
+        if ((m_ptr - i) > -1)
+            m_stack[m_ptr - i] = std::move(node);
+        // anything useful we can do on failure??
+    }
+
+    int depth() const
+    {
+        return m_ptr + 1;
+    }
+
 private:
     std::vector<PycRef<ASTNode>> m_stack;
     int m_ptr;

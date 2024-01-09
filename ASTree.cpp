@@ -1387,6 +1387,11 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
 
                 } while (prev != nil);
 
+                if (blocks.empty()) {
+                    fprintf(stderr, "Something bad happened\n");
+                    cleanBuild = false;
+                    return new ASTNodeList(defblock->nodes());
+                }
                 curblock = blocks.top();
 
                 if (curblock->blktype() == ASTBlock::BLK_EXCEPT) {
@@ -2442,6 +2447,31 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
             break;
         case Pyc::GEN_START_A:
             stack.pop();
+            break;
+        case Pyc::SWAP_A:
+            {
+                PycRef<ASTNode> val_top = stack.top();
+                PycRef<ASTNode> val_low = stack.get(operand - 1);
+                if (!val_top) {
+                    fprintf(stderr, "SWAP on empty stack\n");
+                    cleanBuild = false;
+                    return new ASTNodeList(defblock->nodes());
+                }
+                if (!val_low) {
+                    fprintf(stderr, "SWAP overruns stack\n");
+                    cleanBuild = false;
+                    return new ASTNodeList(defblock->nodes());
+                }
+                if ((val_top.type() == ASTNode::NODE_CHAINSTORE) || (val_low.type() == ASTNode::NODE_CHAINSTORE))
+                {
+                    fprintf(stderr, "Not handling NODE_CHAINSTORE in SWAP_A right now\n");
+                    cleanBuild = false;
+                    return new ASTNodeList(defblock->nodes());
+                }
+                stack.put(operand - 1, val_low);
+                stack.pop();
+                stack.push(val_top);
+            }
             break;
         default:
             fprintf(stderr, "Unsupported opcode: %s\n", Pyc::OpcodeName(opcode & 0xFF));
